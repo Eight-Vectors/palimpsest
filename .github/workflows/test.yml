@@ -1,0 +1,45 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SBCL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbcl
+          sbcl --version
+
+      - name: Cache Quicklisp
+        uses: actions/cache@v4
+        with:
+          path: ~/quicklisp
+          key: quicklisp-${{ runner.os }}-${{ hashFiles('palimpsest.asd') }}
+
+      - name: Install Quicklisp
+        run: |
+          if [ ! -f ~/quicklisp/setup.lisp ]; then
+            curl -sSfLO https://beta.quicklisp.org/quicklisp.lisp
+            sbcl --non-interactive --load quicklisp.lisp \
+                 --eval '(quicklisp-quickstart:install)'
+          fi
+          mkdir -p ~/quicklisp/local-projects
+          ln -sfn "$GITHUB_WORKSPACE" ~/quicklisp/local-projects/palimpsest
+
+      - name: Load without warnings
+        run: |
+          sbcl --non-interactive --load ~/quicklisp/setup.lisp \
+               --eval '(ql:quickload (list :alexandria :fset :dexador :com.inuoe.jzon) :silent t)' \
+               --eval '(handler-bind ((warning (lambda (w) (unless (typep w (quote sb-kernel:redefinition-warning)) (format *error-output* "~&WARNING: ~a~%" w) (uiop:quit 1))))) (asdf:load-system :palimpsest :force (list :palimpsest)))'
+
+      - name: Run tests
+        run: |
+          sbcl --non-interactive --load ~/quicklisp/setup.lisp \
+               --eval '(ql:quickload :palimpsest/tests :silent t)' \
+               --eval '(asdf:test-system :palimpsest)'

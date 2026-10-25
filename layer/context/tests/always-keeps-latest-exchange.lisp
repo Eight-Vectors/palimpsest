@@ -1,0 +1,11 @@
+;;; test context/always-keeps-latest-exchange -- append-only
+(let* ((big (make-string 5000 :initial-element #\x))
+       (context (assemble-context (list (list :role :user :text "the task")
+                                        (list :role :assistant :text "old step")
+                                        (list :role :user :text "old result")
+                                        (list :role :assistant :text "latest step")
+                                        (list :role :user :text big))
+                                  100)))
+  (and (= (length context) 3)
+       (equal (getf (second context) :text) "latest step")
+       (eq (getf (third context) :text) big)))
